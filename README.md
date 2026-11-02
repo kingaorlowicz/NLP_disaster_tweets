@@ -48,7 +48,6 @@ The BERTweet ensemble is currently the best-performing approach.
 .
 ├── code_baseline.ipynb      # EDA, cleaning, TF-IDF + LR / SVC
 ├── code_transformer.ipynb   # BERTweet fine-tuning + 3-fold ensemble
-├── train.csv                # train dataset from Kaggle used to train and validate models
 └── README.md
 ```
 
