@@ -1,7 +1,7 @@
 # Natural Language Processing with Disaster Tweets
 My solution to the Kaggle competition [NLP with Disaster Tweets](https://www.kaggle.com/competitions/nlp-getting-started).
 
-**Current Kaggle score: 0.84554 (F1)**
+**Current Kaggle score: 0.84952 (F1)**
 
 ## Overview
 
@@ -13,7 +13,7 @@ Twitter is used to report emergencies in real time, but not every tweet that men
 
 ## Approach
 
-The project is split into two notebooks.
+The project explores classical ML baselines and advanced Deep Learning techniques using pre-trained Transformer architectures.
 
 ### 1. Baseline: TF-IDF + classical models (`code_baseline.ipynb`)
 
@@ -24,34 +24,42 @@ The project is split into two notebooks.
   - TF-IDF + Logistic Regression: **validation F1 = 0.7773**
   - TF-IDF + linear SVC: **validation F1 = 0.7727**
 
-### 2. Transformer: fine-tuned BERTweet + ensemble (`code_transformer.ipynb`)
+### 2. Transformer: fine-tuned BERTweet + initial ensemble (`code_transformer.ipynb`)
 
-- **Data cleaning:** removed duplicated tweets and tweets with conflicting labels, which are label noise.
-- **Preprocessing:** minimal, in the format BERTweet expects. URLs become `HTTPURL` and mentions become `@USER`. Punctuation and casing are kept because the model uses them.
-- **Model:** [`vinai/bertweet-base`](https://huggingface.co/vinai/bertweet-base), a RoBERTa-style model pretrained on English tweets, fine-tuned with Hugging Face `Trainer` (3 epochs, lr 2e-5, batch size 16, max length 128).
-- **Error analysis:** inspected false positives and false negatives on the validation split.
-- **Ensemble:** 3-fold stratified cross-validation. A separate BERTweet is fine-tuned on each fold, and the softmax probabilities of the three models on the test set are averaged to produce the final prediction.
+- **Data cleaning:** removed duplicated tweets and tweets with conflicting labels (noisy labels).
+- **Preprocessing:** minimal formatting expected by BERTweet (URLs -> `HTTPURL`, mentions -> `@USER`).
+- **Model:** [`vinai/bertweet-base`](https://huggingface.co/vinai/bertweet-base) fine-tuned with Hugging Face `Trainer`.
+- **Location Feature Engineering:** Attempted to prepend the `location` column to the text, using `geotext` to flag real geographical entities. Resulted in a slight score drop (**0.84462**), indicating the feature introduced more noise than signal.
+- **Base Ensemble:** 3-fold stratified cross-validation. Averaging softmax probabilities of 3 BERTweet models yielded a strong baseline of **0.84554**.
+
+### 3. Advanced Techniques: Dealing with Noisy Labels and Plateauing
+
+To push beyond the ~0.845 limit, I experimented with techniques designed for datasets with mislabeled samples:
+
+- **Hard-Voting Ensemble (BERTweet + RoBERTa) (`transformer_ensemble.ipynb`):** Trained a separate `roberta-base` model (**0.84216**) and combined it with the BERTweet using trust-based hard voting. This approach failed (**0.84370**) because the weaker model occasionally overruled correct predictions from the stronger one.
+- **Pseudo-labeling (Semi-supervised learning) (`pseudo_labeling.ipynb`):** Used the best BERTweet model to predict the test set and appended the most confident predictions (>=95% confidence) to the training data. This lowered the score (**0.84247**) due to "confirmation bias" — the model confidently reinforced the dataset's original labeling errors.
+- **Label Smoothing (`label_smoothing.ipynb`):** Applied to the core BERTweet model (`label_smoothing_factor=0.1`). Instead of forcing 100% confidence, the model aims for 90%, preventing it from aggressively overfitting to mislabeled tweets in the training set. This single change pushed the model to its mathematical peak on these data without leakage.
 
 ## Results
 
-| Approach | Score |
+| Approach | Kaggle Public Score (F1) |
 |---|---|
-| TF-IDF + Logistic Regression | 0.7773 (validation F1) |
-| TF-IDF + SVC | 0.7727 (validation F1) |
-| **BERTweet 3-fold ensemble** | **0.84554 (Kaggle public leaderboard)** |
+| TF-IDF + Logistic Regression | ~0.7773 (Local CV) |
+| BERTweet + Location Feature Engineering | 0.84462 |
+| BERTweet 3-fold ensemble (Base) | 0.84554 |
+| Hard Voting Ensemble (BERTweet + RoBERTa) | 0.84370 |
+| BERTweet with Pseudo-labeling | 0.84247 |
+| **BERTweet with Label Smoothing (0.1)** | **0.84952** |
 
-The BERTweet ensemble is currently the best-performing approach.
+The single BERTweet model with label smoothing achieved **0.84952**, reaching the practical ceiling for this competition without exploiting data leakage (finding the original Figure Eight dataset).
 
 ## Repository structure
-
 ```
 .
-├── code_baseline.ipynb      # EDA, cleaning, TF-IDF + LR / SVC
-├── code_transformer.ipynb   # BERTweet fine-tuning + 3-fold ensemble
-└── README.md
+├── code_baseline.ipynb          # EDA, cleaning, TF-IDF + LR / SVC
+├── code_transformer.ipynb       # Base BERTweet fine-tuning and cross-validation
+├── transformer_ensemble.ipynb   # Hard-voting ensemble with RoBERTa
+├── pseudo_labeling.ipynb        # Semi-supervised learning experiment
+├── label_smoothing.ipynb        # Final BERTweet model with modified loss function
+└── README.md                    # Project documentation
 ```
-
-
-## Possible next steps
-- Tune the learning rate, number of epochs, and max sequence length.
-- Use the `keyword` and `location` columns as additional input to the transformer.
